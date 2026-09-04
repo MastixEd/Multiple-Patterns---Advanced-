@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visual Pattern Detective</title>
+    <!-- Load Tailwind CSS for easy styling --><script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1f2937; /* Dark background */
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .game-container {
+            background-color: #374151; /* Card background */
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            max-width: 90%;
+            width: 700px;
+            text-align: center;
+            border: 4px solid #4b5563;
+        }
+
+        .tile {
+            width: 70px; /* Larger tiles */
+            height: 70px;
+            border-radius: 0.5rem;
+            transition: transform 0.1s, box-shadow 0.1s, opacity 0.3s;
+            display: inline-flex;
+            flex-direction: column; /* For number and emoji */
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+            margin: 5px;
+            padding: 5px;
+            line-height: 1; /* Adjust for better vertical alignment */
+        }
+
+        .tile-emoji {
+            font-size: 2.2rem; /* Larger emoji */
+            line-height: 1;
+        }
+        .tile-number {
+            font-size: 0.9rem; /* Smaller number */
+            line-height: 1;
+            margin-top: 3px;
+        }
+
+        .tile:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.35);
+        }
+
+        .option-tile {
+            cursor: pointer;
+            margin: 10px;
+        }
+
+        .option-tile:active {
+            transform: scale(0.95);
+        }
+
+        .current-pattern-display {
+            min-height: 90px; /* Ensure space for larger tiles */
+            background-color: #4b5563;
+            border-radius: 0.75rem;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-bottom: 25px;
+        }
+
+        .hidden-tile {
+            opacity: 0.3;
+            border: 3px dashed #d1d5db;
+            background-color: transparent !important;
+            box-shadow: none;
+            color: #d1d5db; /* Question mark color */
+        }
+
+        .message-box {
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.5rem;
+            margin-top: 1.5rem;
+            font-size: 1.1rem;
+            border-radius: 0.5rem;
+            font-weight: 600;
+        }
+
+        .correct { background-color: #10b981; color: white; }
+        .incorrect { background-color: #ef4444; color: white; }
+        .neutral { background-color: #6b7280; color: white; }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .game-container {
+                padding: 1.5rem;
+                width: 100%;
+            }
+            .tile {
+                width: 60px;
+                height: 60px;
+                font-size: 1rem;
+                margin: 4px;
+            }
+            .tile-emoji { font-size: 1.8rem; }
+            .tile-number { font-size: 0.8rem; }
+            .option-tile { margin: 6px; }
+            .current-pattern-display { padding: 10px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer" class="game-container">
+    <h1 class="text-3xl font-extrabold text-white mb-4">Visual Pattern Detective</h1>
+    <p id="levelDisplay" class="text-xl text-gray-300 mb-6">Level 1</p>
+
+    <!-- Pattern Display Area --><div id="patternDisplay" class="current-pattern-display">
+        <!-- Pattern tiles will be injected here by JavaScript --></div>
+
+    <p class="text-gray-200 mt-4 mb-3 text-lg font-medium">Which tile comes next?</p>
+
+    <!-- Options Area --><div id="optionsContainer" class="flex justify-center flex-wrap space-x-2 sm:space-x-4 p-2 bg-gray-600 rounded-lg shadow-inner">
+        <!-- Option tiles will be injected here by JavaScript --></div>
+
+    <!-- Feedback and Score --><div id="messageBox" class="message-box neutral">
+        Select the next tile to start.
+    </div>
+
+    <div class="mt-8 flex justify-center space-x-4">
+        <button id="nextLevelButton" class="px-6 py-2 bg-indigo-500 text-white font-bold rounded-lg shadow-lg hover:bg-indigo-600 transition disabled:opacity-50" disabled>
+            Next Pattern
+        </button>
+        <div class="text-xl text-white font-bold px-4 py-2 bg-gray-700 rounded-lg">
+            Score: <span id="scoreDisplay">0</span>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Global game state variables
+    const TILE_COLORS = [
+        "bg-red-500", "bg-blue-500", "bg-green-500", "bg-yellow-500",
+        "bg-purple-500", "bg-pink-500", "bg-teal-500", "bg-orange-500"
+    ];
+    const TILE_EMOJIS = ["🍎", "🍋", "🍇", "🍓", "🍉", "🍒", "🍑", "🍍", "🍌", "🥝", "🍊", "🥑"]; // Fruits
+    const TILE_SHAPES = ["🔴", "🟦", "🔺", "⭐", "🌈", "⚡", "💧", "🌍", "🌸", "☀️", "☁️", "❄️"]; // Geometric/Natural Emojis for Shapes
+    const TILE_NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]; // Numbers
+
+    let currentLevel = 1;
+    let score = 0;
+    let currentPattern = [];
+    let correctNextTile = {};
+    let isWaitingForNext = false;
+    let patternIndex = 0; // Tracks which pattern variant to use for a given level
+
+    // DOM Elements
+    const patternDisplay = document.getElementById('patternDisplay');
+    const optionsContainer = document.getElementById('optionsContainer');
+    const messageBox = document.getElementById('messageBox');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const levelDisplay = document.getElementById('levelDisplay');
+    const nextLevelButton = document.getElementById('nextLevelButton');
+
+    // --- Utility Functions ---
+
+    /**
+     * Generates a unique tile object with emoji, shape-emoji, number, and color.
+     * @param {number} emojiIndex - Index for TILE_EMOJIS array.
+     * @param {number} shapeIndex - Index for TILE_SHAPES array.
+     * @param {number} numberIndex - Index for TILE_NUMBERS array.
+     * @param {number} colorIndex - Index for TILE_COLORS array.
+     * @returns {object} - Tile data structure.
+     */
+    function createTile(emojiIndex, shapeIndex, numberIndex, colorIndex) {
+        return {
+            emoji: TILE_EMOJIS[emojiIndex % TILE_EMOJIS.length],
+            shape: TILE_SHAPES[shapeIndex % TILE_SHAPES.length],
+            number: TILE_NUMBERS[numberIndex % TILE_NUMBERS.length],
+            color: TILE_COLORS[colorIndex % TILE_COLORS.length],
+            emojiIndex: emojiIndex,
+            shapeIndex: shapeIndex,
+            numberIndex: numberIndex,
+            colorIndex: colorIndex
+        };
+    }
+
+    /**
+     * Creates the core pattern logic based on the level.
+     * Each pattern type combines different elements.
+     * @param {number} level - Current game level.
+     * @returns {object} - Object containing pattern function, sequence length, and options logic.
+     */
+    function getPatternLogic(level) {
+        // Use a variant based on the patternIndex, cycling through different pattern types
+        const variant = patternIndex % 5; // 5 different pattern types for more variety
+
+        // Helper to get random unique indices for options
+        function getRandomUniqueIndices(max, count, exclude = []) {
+            const indices = new Set(exclude);
+            while (indices.size < count + exclude.length) {
+                indices.add(Math.floor(Math.random() * max));
+            }
+            return Array.from(indices).filter(val => !exclude.includes(val)).slice(0, count);
+        }
+
+        // Level 1: Simple Emoji + Number A-B-A-B
+        if (level === 1) {
+            const A = createTile(0, 0, 0, 0); // 🍎🔴1 Red
+            const B = createTile(1, 1, 1, 1); // 🍋🟦2 Blue
+            return {
+                generate: (n) => Array.from({ length: n }, (_, i) => (i % 2 === 0 ? A : B)),
+                length: 6,
+                options: [A, B, createTile(2, 2, 2, 2), createTile(3, 3, 3, 3)],
+            };
+        }
+        // Level 2: Emoji + Shape rotation, Number increments
+        if (level === 2) {
+            return {
+                generate: (n) => Array.from({ length: n }, (_, i) => {
+                    const emojiIdx = i % 3; // 🍎🍋🍇
+                    const shapeIdx = i % 2; // 🔴🟦
+                    const numIdx = i % TILE_NUMBERS.length; // 1,2,3,4...
+                    const colorIdx = (i + 1) % TILE_COLORS.length; // Red, Blue, Green, Yellow...
+                    return createTile(emojiIdx, shapeIdx, numIdx, colorIdx);
+                }),
+                length: 8,
+                options: [
+                    createTile(0, 0, 0, 0), createTile(1, 1, 1, 1), createTile(2, 0, 2, 2), createTile(0, 1, 3, 3)
+                ],
+            };
+        }
+        // Level 3: Number sequence (fibonacci-like) + constant emoji/shape/color
+        if (level === 3) {
+            const fixedEmoji = 4; // 🍉
+            const fixedShape = 3; // ⭐
+            const fixedColor = 5; // Pink
+            return {
+                generate: (n) => {
+                    const seq = [0, 1]; // Number indices
+                    while (seq.length < n) {
+                        seq.push((seq[seq.length - 1] + seq[seq.length - 2]) % TILE_NUMBERS.length);
+                    }
+                    return Array.from({ length: n }, (_, i) => createTile(fixedEmoji, fixedShape, seq[i], fixedColor));
+                },
+                length: 7,
+                options: [
+                    createTile(fixedEmoji, fixedShape, (0 + 1) % TILE_NUMBERS.length, fixedColor),
+                    createTile(fixedEmoji, fixedShape, (1 + 1) % TILE_NUMBERS.length, fixedColor),
+                    createTile(fixedEmoji, fixedShape, (2 + 1) % TILE_NUMBERS.length, fixedColor),
+                    createTile(fixedEmoji, fixedShape, (3 + 1) % TILE_NUMBERS.length, fixedColor)
+                ],
+            };
+        }
+        // Level 4: All elements rotate, but one element's rotation speed changes
+        if (level === 4) {
+            return {
+                generate: (n) => Array.from({ length: n }, (_, i) => {
+                    const emojiIdx = i % TILE_EMOJIS.length;
+                    const shapeIdx = Math.floor(i / 2) % TILE_SHAPES.length; // Shape changes slower
+                    const numIdx = (i * 2) % TILE_NUMBERS.length; // Number changes faster
+                    const colorIdx = (i + 2) % TILE_COLORS.length;
+                    return createTile(emojiIdx, shapeIdx, numIdx, colorIdx);
+                }),
+                length: 9,
+                options: [
+                    createTile(0, 0, 0, 0), createTile(1, 1, 1, 1), createTile(2, 0, 2, 2), createTile(0, 1, 3, 3)
+                ],
+            };
+        }
+
+        // --- Advanced Patterns (Level 5+) ---
+
+        // Variant 0: All elements cycle independently at different rates
+        if (variant === 0) {
+            const eRate = 1 + (level % 3); // Emoji every 1, 2, or 3 steps
+            const sRate = 1 + ((level + 1) % 3); // Shape every 1, 2, or 3 steps
+            const nRate = 1 + ((level + 2) % 3); // Number every 1, 2, or 3 steps
+            const cRate = 1 + ((level + 3) % 3); // Color every 1, 2, or 3 steps
+
+            return {
+                generate: (n) => Array.from({ length: n }, (_, i) => {
+                    const emojiIdx = Math.floor(i / eRate) % TILE_EMOJIS.length;
+                    const shapeIdx = Math.floor(i / sRate) % TILE_SHAPES.length;
+                    const numIdx = Math.floor(i / nRate) % TILE_NUMBERS.length;
+                    const colorIdx = Math.floor(i / cRate) % TILE_COLORS.length;
+                    return createTile(emojiIdx, shapeIdx, numIdx, colorIdx);
+                }),
+                length: Math.min(10, 6 + Math.floor(level / 2)),
+                options: [
+                    createTile(0,0,0,0), createTile(1,1,1,1), createTile(2,2,2,2), createTile(3,3,3,3) // Generic options for variety
+                ]
+            };
+        }
+
+        // Variant 1: Two elements are linked (e.g., Emoji and Number move together)
+        if (variant === 1) {
+            return {
+                generate: (n) => Array.from({ length: n }, (_, i) => {
+                    const linkedIndex = i % 4; // Emoji and Number use this
+                    const shapeIdx = Math.floor(i / 2) % TILE_SHAPES.length;
+                    const colorIdx = (i + 1) % TILE_COLORS.length;
+                    return createTile(linkedIndex, shapeIdx, linkedIndex, colorIdx);
+                }),
+                length: Math.min(10, 7 + Math.floor(level / 2)),
+                options: [
+                    createTile(0,0,0,0), createTile(1,1,1,1), createTile(2,2,2,2), createTile(3,3,3,3)
+                ]
+            };
+        }
+
+        // Variant 2: Alternating rule for one property
+        if (variant === 2) {
+            return {
+                generate: (n) => Array.from({ length: n }, (_, i) => {
+                    const emojiIdx = i % TILE_EMOJIS.length;
+                    const shapeIdx = (i % 2 === 0) ? (i % 3) : ((i + 1) % 3); // Shape alternates its rule
+                    const numIdx = i % TILE_NUMBERS.length;
+                    const colorIdx = (i + 2) % TILE_COLORS.length;
+                    return createTile(emojiIdx, shapeIdx, numIdx, colorIdx);
+                }),
+                length: Math.min(10, 8 + Math.floor(level / 2)),
+                options: [
+                    createTile(0,0,0,0), createTile(1,1,1,1), createTile(2,2,2,2), createTile(3,3,3,3)
+                ]
+            };
+        }
+
+        // Variant 3: Incrementing number, other properties cycle based on number value
+        if (variant === 3) {
+            return {
+                generate: (n) => Array.from({ length: n }, (_, i) => {
+                    const currentNum = TILE_NUMBERS[i % TILE_NUMBERS.length];
+                    const emojiIdx = currentNum % TILE_EMOJIS.length;
+                    const shapeIdx = Math.floor(currentNum / 2) % TILE_SHAPES.length;
+                    const colorIdx = currentNum % TILE_COLORS.length;
+                    return createTile(emojiIdx, shapeIdx, i, colorIdx);
+                }),
+                length: Math.min(10, 7 + Math.floor(level / 3)),
+                options: [
+                    createTile(0,0,0,0), createTile(1,1,1,1), createTile(2,2,2,2), createTile(3,3,3,3)
+                ]
+            };
+        }
+
+        // Variant 4: Complex repetition with different offsets
+        if (variant === 4) {
+             const baseEmoji = (level % 3);
+             const baseShape = (level + 1) % 3;
+             const baseNumber = (level + 2) % 3;
+             const baseColor = (level + 3) % 3;
+
+            return {
+                generate: (n) => Array.from({ length: n }, (_, i) => {
+                    const emojiIdx = (baseEmoji + i) % TILE_EMOJIS.length;
+                    const shapeIdx = (baseShape + i) % TILE_SHAPES.length;
+                    const numIdx = (baseNumber + i) % TILE_NUMBERS.length;
+                    const colorIdx = (baseColor + i) % TILE_COLORS.length;
+                    return createTile(emojiIdx, shapeIdx, numIdx, colorIdx);
+                }),
+                length: Math.min(10, 8 + Math.floor(level / 3)),
+                options: [
+                    createTile(0,0,0,0), createTile(1,1,1,1), createTile(2,2,2,2), createTile(3,3,3,3)
+                ]
+            };
+        }
+
+        // Fallback for very high levels or unexpected errors
+        return getPatternLogic(4);
+    }
+
+    /**
+     * Shuffles an array in place (Fisher-Yates algorithm).
+     * @param {Array} array - The array to shuffle.
+     */
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
+    }
+
+    /**
+     * Gets a tile's HTML representation.
+     * @param {object} tile - The tile data.
+     * @param {string} classes - Additional CSS classes.
+     * @param {boolean} isOption - If true, attach click handler.
+     * @returns {string} - HTML string.
+     */
+    function getTileHTML(tile, classes, isOption = false) {
+        const dataAttributes = `
+            data-emoji="${tile.emojiIndex}"
+            data-shape="${tile.shapeIndex}"
+            data-number="${tile.numberIndex}"
+            data-color="${tile.colorIndex}"
+        `;
+        const clickHandler = isOption ? `onclick="handleOptionClick(this)"` : '';
+        const numberDisplay = tile.number !== undefined ? `<div class="tile-number">${tile.number}</div>` : '';
+        const emojiDisplay = tile.emoji ? `<div class="tile-emoji">${tile.emoji}</div>` : '';
+        const shapeDisplay = tile.shape ? `<div class="tile-emoji">${tile.shape}</div>` : ''; // Using emoji for shape
+
+        return `
+            <div class="tile ${tile.color} ${classes}" ${dataAttributes} ${clickHandler}>
+                ${emojiDisplay}
+                ${shapeDisplay}
+                ${numberDisplay}
+            </div>
+        `;
+    }
+
+    // --- Game Logic Functions ---
+
+    /**
+     * Initializes a new pattern/level.
+     */
+    function loadNewPattern() {
+        isWaitingForNext = false;
+        patternDisplay.innerHTML = '';
+        optionsContainer.innerHTML = '';
+        messageBox.className = 'message-box neutral';
+        messageBox.textContent = 'Which tile comes next?';
+        nextLevelButton.disabled = true;
+
+        levelDisplay.textContent = `Level ${currentLevel}`;
+
+        const logic = getPatternLogic(currentLevel);
+        const sequence = logic.generate(logic.length);
+        currentPattern = sequence.slice(0, -1); // Pattern to display (all but the last)
+        correctNextTile = sequence[sequence.length - 1]; // The correct tile (the last one)
+
+        // 1. Display the Pattern
+        currentPattern.forEach(tile => {
+            patternDisplay.innerHTML += getTileHTML(tile, '');
+        });
+
+        // Add the blank tile for the answer
+        patternDisplay.innerHTML += getTileHTML(
+            { color: 'bg-gray-400', emoji: '?', shape: '', number: '' }, // Placeholder for emoji and number
+            'hidden-tile',
+            false
+        );
+
+        // 2. Prepare and Display Options
+        let options = logic.options.filter(opt =>
+            opt.emojiIndex !== correctNextTile.emojiIndex ||
+            opt.shapeIndex !== correctNextTile.shapeIndex ||
+            opt.numberIndex !== correctNextTile.numberIndex ||
+            opt.colorIndex !== correctNextTile.colorIndex
+        );
+
+        // Ensure the correct tile is one of the options, replacing a random one if necessary
+        options = options.slice(0, 3); // Take up to 3 options
+        options.push(correctNextTile); // Add the correct one
+
+        // Filter for uniqueness (by all indices)
+        const uniqueOptionsMap = new Map();
+        options.forEach(opt => {
+            const key = `${opt.emojiIndex}-${opt.shapeIndex}-${opt.numberIndex}-${opt.colorIndex}`;
+            uniqueOptionsMap.set(key, opt);
+        });
+        options = Array.from(uniqueOptionsMap.values());
+
+        // Ensure exactly 4 options by padding with random unique tiles if needed
+        while (options.length < 4) {
+            const randomEmoji = Math.floor(Math.random() * TILE_EMOJIS.length);
+            const randomShape = Math.floor(Math.random() * TILE_SHAPES.length);
+            const randomNumber = Math.floor(Math.random() * TILE_NUMBERS.length);
+            const randomColor = Math.floor(Math.random() * TILE_COLORS.length);
+            const newTile = createTile(randomEmoji, randomShape, randomNumber, randomColor);
+            const key = `${newTile.emojiIndex}-${newTile.shapeIndex}-${newTile.numberIndex}-${newTile.colorIndex}`;
+            if (!uniqueOptionsMap.has(key)) {
+                uniqueOptionsMap.set(key, newTile);
+                options.push(newTile);
+            }
+        }
+        options = options.slice(0, 4); // Trim back to 4 if we generated too many unique ones
+
+        shuffleArray(options);
+
+        options.forEach(tile => {
+            optionsContainer.innerHTML += getTileHTML(tile, 'option-tile', true);
+        });
+    }
+
+    /**
+     * Handles the click on an option tile.
+     * @param {HTMLElement} element - The clicked tile element.
+     */
+    function handleOptionClick(element) {
+        if (isWaitingForNext) return;
+
+        isWaitingForNext = true;
+        const selectedEmoji = parseInt(element.getAttribute('data-emoji'));
+        const selectedShape = parseInt(element.getAttribute('data-shape'));
+        const selectedNumber = parseInt(element.getAttribute('data-number'));
+        const selectedColor = parseInt(element.getAttribute('data-color'));
+
+        const isCorrect = (
+            selectedEmoji === correctNextTile.emojiIndex &&
+            selectedShape === correctNextTile.shapeIndex &&
+            selectedNumber === correctNextTile.numberIndex &&
+            selectedColor === correctNextTile.colorIndex
+        );
+
+        // Display the chosen tile in the blank space
+        patternDisplay.lastChild.outerHTML = getTileHTML(
+            {
+                emoji: TILE_EMOJIS[selectedEmoji],
+                shape: TILE_SHAPES[selectedShape],
+                number: TILE_NUMBERS[selectedNumber],
+                color: TILE_COLORS[selectedColor]
+            },
+            ''
+        );
+
+        if (isCorrect) {
+            score++;
+            messageBox.className = 'message-box correct';
+            messageBox.textContent = 'Correct! Amazing pattern recognition!';
+            currentLevel++;
+            patternIndex++; // Move to next pattern variant for next level
+        } else {
+            messageBox.className = 'message-box incorrect';
+            // Display the chosen (incorrect) tile and then the correct one
+            const correctHTML = getTileHTML(correctNextTile, 'inline-flex ml-3', false);
+            messageBox.innerHTML = `Incorrect! The correct tile was: ${correctHTML}`;
+            // We don't increment level or patternIndex on incorrect answer,
+            // allowing the user to try the same difficulty or variant next.
+        }
+
+        scoreDisplay.textContent = score;
+        nextLevelButton.disabled = false;
+
+        // Disable all options after selection
+        Array.from(optionsContainer.children).forEach(opt => opt.onclick = null);
+    }
+
+    /**
+     * Event listener for the "Next Pattern" button.
+     */
+    nextLevelButton.addEventListener('click', () => {
+        // If the answer was correct, progress to the next level.
+        if (messageBox.classList.contains('correct')) {
+            loadNewPattern();
+        } else {
+            // If the answer was incorrect, we can either retry the same level (currentLevel)
+            // or try a different variant of the same level's difficulty.
+            // For now, let's just re-load a new pattern for the *same* level,
+            // but increment patternIndex to get a new variant.
+            patternIndex++;
+            loadNewPattern();
+        }
+    });
+
+    // Initialize the game on load
+    window.onload = loadNewPattern;
+</script>
+
+</body>
+</html>
